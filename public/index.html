@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SailorsTab</title>
+
+    <!-- Load React. -->
+    <!-- Note: when deploying, replace "development.js" with "production.min.js". -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/react@16/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js" crossorigin></script>
+
+    <!-- update the version number as needed -->
+    <script defer src="/__/firebase/7.14.3/firebase-app.js"></script>
+    <!-- include only the Firebase features as you need -->
+    <script defer src="/__/firebase/7.14.3/firebase-auth.js"></script>
+    <script defer src="/__/firebase/7.14.3/firebase-database.js"></script>
+    <script defer src="/__/firebase/7.14.3/firebase-messaging.js"></script>
+    <script defer src="/__/firebase/7.14.3/firebase-storage.js"></script>
+    <script defer src="/__/firebase/7.14.3/firebase-firestore.js"></script>
+    <!-- initialize the SDK after all desired features are loaded -->
+    <script defer src="/__/firebase/init.js"></script>
+
+    <script src="scripts/log.js"></script>
+    <script src="scripts/auth.js"></script>
+    <script src="scripts/bar.js"></script>
+
+    <link rel="stylesheet" href="css/bulma.css" type="text/css">
+</head>
+<body>
+<div id="app"></div>
+<script type="text/babel">
+    class Header extends React.Component {
+        render() {
+            return <>
+                <h1>{this.props.user != null ? this.props.user.displayName + "'s " : ""}SailorsTab</h1>
+            </>
+        }
+    }
+
+    //
+    // Buying
+    //
+    class ProductBuyButton extends React.Component {
+        render() {
+            return <div className="column">
+                <div className="button is-info">
+                    {this.props.product.name}<br/>&euro;{this.props.product.price.toFixed(2).toString().replace(".", ",")}
+                </div>
+            </div>;
+        }
+    }
+
+    class ProductBuyList extends React.Component {
+        render() {
+            let products = this.props.products.map((p => <ProductBuyButton product={p} key={p.id}/>));
+            return <div className="columns">
+                {products}
+            </div>;
+        }
+    }
+
+    //
+    // Management
+    //
+    class ProductManageTable extends React.Component {
+        render() {
+            return <>
+                <h2>Beheer</h2>
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Naam</th>
+                        <th>Prijs</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {this.props.products.map((p => <ProductManageTableRow product={p} key={p.id}/>))}
+                    <ProductManageTableRow product={new Product("", "", 0)}/>
+                    </tbody>
+                </table>
+            </>
+        }
+    }
+
+    class ProductManageTableRow extends React.Component {
+        state = {};
+
+        constructor(props) {
+            super(props);
+            this.state = {
+                id: this.props.product.id,
+                name: this.props.product.name,
+                price: this.props.product.price,
+            };
+        }
+
+        render() {
+            return <tr>
+                <td>
+                    <input type="text" value={this.state.name} onChange={(e) => this.setState({name: e.target.value})}/>
+                </td>
+                <td>
+                    <input type="text" value={this.state.price}
+                           onChange={(e) => this.setState({price: e.target.value})}/>
+                </td>
+                <td>
+                    <input type="button" value="Save" onClick={() => this.save()}/>
+                </td>
+            </tr>;
+        }
+
+        save() {
+            const record = {
+                name: this.state.name,
+                price: this.state.price,
+            };
+            if (this.state.id) {
+                console.log("updating product");
+                firebase.firestore().collection('products').doc(this.state.id)
+                    .update(record)
+                    .catch(logError);
+            } else {
+                console.log("adding product");
+                firebase.firestore().collection('products')
+                    .add(record)
+                    .catch(logError);
+            }
+        }
+    }
+
+    //
+    // App
+    //
+    class App extends React.Component {
+        state = {products: []};
+
+        constructor(props) {
+            super(props);
+            this.auth = new AuthenticationContext(() => this.forceUpdate());
+        }
+
+        componentDidMount() {
+            new Bar().getProducts().then((products) => this.setState({products: products}))
+        }
+
+        render() {
+            return <>
+                <section className="section">
+                    <Header user={this.auth.user}/>
+                </section>
+                <section className="section">
+                    <ProductBuyList products={this.state.products}/>
+                </section>
+                <section className="section">
+                    <ProductManageTable products={this.state.products}/>
+                </section>
+            </>;
+        }
+    }
+</script>
+
+
+<script type="text/babel">
+    document.addEventListener('DOMContentLoaded', function () {
+        // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+        // The Firebase SDK is initialized and available here!
+        firebase.auth().onAuthStateChanged(user => {
+        });
+        firebase.database().ref('/path/to/ref').on('value', snapshot => {
+        });
+        firebase.messaging().requestPermission().then(() => {
+        });
+        firebase.storage().ref('/path/to/ref').getDownloadURL().then(() => {
+        });
+
+        // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+        let app = firebase.app();
+        let features = ['auth', 'database', 'messaging', 'storage'].filter(feature => typeof app[feature] === 'function');
+        if (window.console) {
+            console.log(`Firebase SDK loaded with ${features.join(', ')}`);
+        }
+    });
+    ReactDOM.render(<App/>, document.getElementById('app'));
+</script>
+</body>
+</html>
