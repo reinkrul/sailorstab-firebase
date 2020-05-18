@@ -26,7 +26,11 @@ class User {
 class AuthenticationContext {
     constructor(authenticatedCallback) {
         let t = this;
-        this.user = null;
+        if (firebase.auth().currentUser) {
+            t.user = new User(firebase.auth().currentUser);
+        } else {
+            this.user = null;
+        }
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
                 t.user = new User(firebase.auth().currentUser);
@@ -65,15 +69,26 @@ class AuthenticationContext {
     }
 
     isAuthorized() {
-        return this.user !== null && this.user.authorized
+        // TODO
+        return this.isAuthenticated() && true;// this.user.authorized
     }
 
     isAuthenticated() {
-        return false
+        return this.user !== null;
     }
 
     authenticate() {
         var provider = new firebase.auth.GoogleAuthProvider();
         firebase.auth().signInWithPopup(provider);
+    }
+
+    logout() {
+        let t = this;
+        return firebase.auth().signOut()
+            .then(() => {
+                t.user = null;
+                return true;
+            })
+            .catch(logError)
     }
 }

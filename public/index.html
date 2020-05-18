@@ -31,11 +31,69 @@
 <body>
 <div id="app"></div>
 <script type="text/babel">
+    const STATE_BUY = 'buy';
+    const STATE_MANAGE = 'manage';
+    const STATE_LOGIN = 'login';
+    const STATE_LOGOUT = 'logout';
+    const STATE_ACCESS_REQUESTED = 'access-requested';
+
+    function formatPrice(v) {
+        if (isNaN(v)) {
+            return v;
+        } else if (typeof v === "number") {
+            return v.toFixed(2).toString().replace(".", ",");
+        } else {
+            return formatPrice(parseFloat(v));
+        }
+    }
+
     class Header extends React.Component {
+        state = {navbarCssClass: ''};
+
+        toggleNavbar() {
+            if (this.state.navbarCssClass) {
+                this.setState({navbarCssClass: ''});
+            } else {
+                this.setState({navbarCssClass: 'is-active'});
+            }
+        }
+
         render() {
-            return <>
-                <h1>{this.props.user != null ? this.props.user.displayName + "'s " : ""}SailorsTab</h1>
-            </>
+            return <nav className="navbar" role="navigation" aria-label="main navigation">
+                <div className="navbar-brand">
+                    <div className="navbar-item">SailorsTab</div>
+                    <div className="navbar-item">
+                        {this.props.user != null
+                            ? <div>{this.props.user.displayName}</div>
+                            : <></>
+                        }
+                    </div>
+                    <a role="button" className={"navbar-burger burger " + this.state.navbarCssClass} aria-label="menu"
+                       aria-expanded="false"
+                       data-target="navbarBasicExample" onClick={() => this.toggleNavbar()}>
+                        <span aria-hidden="true"/>
+                        <span aria-hidden="true"/>
+                        <span aria-hidden="true"/>
+                    </a>
+                </div>
+
+                <div id="navbarBasicExample" className={"navbar-menu " + this.state.navbarCssClass}>
+                    <div className="navbar-start">
+                        <a className="navbar-item" onClick={() => this.props.switchState(STATE_BUY)}>Kopen</a>
+                        <a className="navbar-item" onClick={() => this.props.switchState(STATE_MANAGE)}>Beheer</a>
+                        {this.props.user != null
+                            ?  <a className="navbar-item" onClick={() => this.props.switchState(STATE_LOGOUT)}>Uitloggen</a>
+                            : <></>
+                        }
+                    </div>
+                </div>
+            </nav>;
+        }
+    }
+
+    class LoginView extends React.Component {
+        render() {
+            return <div className="buttons"><a className="button is-primary" onClick={() => this.props.switchState(STATE_LOGIN)}><strong>Log in</strong></a></div>;
         }
     }
 
@@ -45,19 +103,53 @@
     class ProductBuyButton extends React.Component {
         render() {
             return <div className="column">
-                <div className="button is-info">
-                    {this.props.product.name}<br/>&euro;{this.props.product.price.toFixed(2).toString().replace(".", ",")}
+                <div className="button is-info" onClick={() => this.props.onClick()}>
+                    {this.props.product.name}<br/>&euro;{formatPrice(this.props.product.price)}
                 </div>
             </div>;
         }
     }
 
-    class ProductBuyList extends React.Component {
+    class ProductBuyView extends React.Component {
+        state = {orderedProducts: []};
+
+        buyProduct(product) {
+            this.setState({orderedProducts: this.state.orderedProducts.concat(product)});
+        }
+
+        checkout() {
+            if (this.state.orderedProducts.length > 0) {
+                this.setState({orderedProducts: []});
+            }
+        }
+
         render() {
-            let products = this.props.products.map((p => <ProductBuyButton product={p} key={p.id}/>));
+            return <>
+                <OrderedProductsList products={this.state.orderedProducts} />
+                <button style={{width: '100%'}} className="button is-primary" disabled={this.state.orderedProducts.length === 0} onClick={() => this.checkout()}>Afrekenen</button>
+                <ProductList products={this.props.products} buyProduct={(p) => this.buyProduct(p)} />
+            </>;
+        }
+    }
+
+    class ProductList extends React.Component {
+        render() {
+            let products = this.props.products.map((p => <ProductBuyButton product={p} key={p.id} onClick={() => this.props.buyProduct(p)}/>));
             return <div className="columns">
                 {products}
             </div>;
+        }
+    }
+
+    class OrderedProduct extends React.Component {
+        render() {
+            return <span className="tag is-dark">{this.props.product.name}</span>;
+        }
+    }
+
+    class OrderedProductsList extends React.Component {
+        render() {
+            return <>{this.props.products.map((p) => <OrderedProduct product={p}>)</OrderedProduct>)}</>;
         }
     }
 
@@ -78,7 +170,7 @@
                     </thead>
                     <tbody>
                     {this.props.products.map((p => <ProductManageTableRow product={p} key={p.id}/>))}
-                    <ProductManageTableRow product={new Product("", "", 0)}/>
+                    <ProductManageTableRow product={new Product("", "", formatPrice(0))}/>
                     </tbody>
                 </table>
             </>
@@ -135,55 +227,79 @@
     // App
     //
     class App extends React.Component {
-        state = {products: []};
+        state = {
+            products: [],
+            currentState: null,
+        };
 
         constructor(props) {
             super(props);
-            this.auth = new AuthenticationContext(() => this.forceUpdate());
+            this.auth = new AuthenticationContext((authState) => {
+                console.log('auth state: ' + authState);
+                switch(authState) {
+                    case AUTHSTATE_AUTHENTICATED: return this.switchState(STATE_BUY);
+                    case AUTHSTATE_NOT_AUTHENTICATED: return this.switchState(STATE_LOGOUT);
+                    case AUTHSTATE_ACCESS_REQUESTED: return this.switchState(STATE_ACCESS_REQUESTED);
+                    default: throw "unknown authstate: " + authState;
+                }
+            });
         }
 
         componentDidMount() {
-            new Bar().getProducts().then((products) => this.setState({products: products}))
+            new Bar().getProducts().then((products) => this.setState({products: products}));
+            // switch to initial state
+            this.switchState(STATE_BUY);
+        }
+
+        switchState(newState) {
+            console.log('Switching state: ' + newState + ', authenticated=' + this.auth.isAuthenticated());
+            if (newState === STATE_LOGIN) {
+                this.auth.authenticate();
+            } else if (newState === STATE_LOGOUT) {
+                this.auth.logout();
+            } else {
+                if (!this.auth.isAuthorized()) {
+                    newState = STATE_LOGOUT;
+                }
+            }
+            this.setState({currentState: newState});
         }
 
         render() {
             return <>
                 <section className="section">
-                    <Header user={this.auth.user}/>
+                    <Header user={this.auth.user} switchState={(e) => this.switchState(e)}/>
                 </section>
-                <section className="section">
-                    <ProductBuyList products={this.state.products}/>
-                </section>
-                <section className="section">
-                    <ProductManageTable products={this.state.products}/>
-                </section>
+                {this.renderView()}
             </>;
         }
+
+        renderView() {
+            let view = (v) => <section className="section">{v}</section>;
+            switch (this.state.currentState) {
+                case STATE_BUY: return view(<ProductBuyView products={this.state.products}/>);
+                case STATE_MANAGE: return view(<ProductManageTable products={this.state.products}/>);
+                case STATE_LOGIN:
+                case null:
+                case STATE_LOGOUT: return view(<LoginView switchState={(e) => this.switchState(e)}/>);
+                default:
+                    throw "unknown state: " + this.state.currentState;
+            }
+        }
     }
-</script>
 
-
-<script type="text/babel">
     document.addEventListener('DOMContentLoaded', function () {
-        // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
-        // The Firebase SDK is initialized and available here!
-        firebase.auth().onAuthStateChanged(user => {
-        });
-        firebase.database().ref('/path/to/ref').on('value', snapshot => {
-        });
-        firebase.messaging().requestPermission().then(() => {
-        });
-        firebase.storage().ref('/path/to/ref').getDownloadURL().then(() => {
-        });
-
-        // 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
         let app = firebase.app();
         let features = ['auth', 'database', 'messaging', 'storage'].filter(feature => typeof app[feature] === 'function');
         if (window.console) {
             console.log(`Firebase SDK loaded with ${features.join(', ')}`);
         }
     });
-    ReactDOM.render(<App/>, document.getElementById('app'));
+    ReactDOM.render(
+        <App/>
+        , document.getElementById('app'));
 </script>
+
+
 </body>
 </html>
