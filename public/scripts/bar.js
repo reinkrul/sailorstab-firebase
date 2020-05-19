@@ -12,6 +12,10 @@ class Product {
 
 class Bar {
 
+    constructor() {
+        this.buyProductFn = firebase.functions().httpsCallable('buyProduct');
+    }
+
     getProducts() {
         console.log('getting products');
         return firebase.firestore().collection('products').orderBy('name', 'asc')
@@ -24,7 +28,16 @@ class Bar {
             .catch(logError);
     }
 
-    buyProduct() {
-
+    buyProduct(account, product) {
+        if (typeof account !== "object") {
+            throw "account should be string";
+        }
+        if (!product.name) {
+            throw "missing name";
+        }
+        if (isNaN(product.price)) {
+            throw "missing price";
+        }
+        return this.buyProductFn({account: account.email, name: product.name, price: product.price})
     }
 }

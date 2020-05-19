@@ -1,5 +1,6 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
+const cors = require('cors')({ origin: true });
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -9,7 +10,7 @@ const admin = require('firebase-admin');
 // });
 
 exports.buyProduct = functions.https.onCall((data, context) => {
-    if (typeof data !== "object" || !Array.isArray(data)) {
+    if (!Array.isArray(data)) {
         throw new functions.https.HttpsError('invalid-argument', 'Data must be an array with bought products.');
     }
     // Checking that the user is authenticated.
@@ -35,6 +36,6 @@ exports.buyProduct = functions.https.onCall((data, context) => {
             price: line.price
         })
             .then(() => console.log("Bought " + line.name + " (price: " + line.price + ") for " + line.account))
-            .catch((err) => throw err);
+            .catch((err) => { throw new functions.https.HttpsError('test/code', 'unable to buy product: ' + err) });
     });
 });

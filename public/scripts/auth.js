@@ -2,11 +2,11 @@ const AUTHSTATE_AUTHENTICATED = 'authenticated';
 const AUTHSTATE_NOT_AUTHENTICATED = 'not-authenticated';
 const AUTHSTATE_ACCESS_REQUESTED = 'access-requested';
 
-
-class User {
+class Account {
     fullName = "";
     displayName = "";
     email = "";
+    account = null;
     authorized = false;
 
     constructor(fbUser, authorized) {
@@ -24,36 +24,44 @@ class User {
 }
 
 class AuthenticationContext {
+    account = null;
+
     constructor(authenticatedCallback) {
         let t = this;
-        if (firebase.auth().currentUser) {
-            t.user = new User(firebase.auth().currentUser);
-        } else {
-            this.user = null;
-        }
         firebase.auth().onAuthStateChanged((user) => {
             if (user) {
-                t.user = new User(firebase.auth().currentUser);
                 // User authenticated, retrieve authorization (account exists?)
-                t.userExists(t.user).then((exists) => {
-                    if (exists) {
-                        console.log('User exists');
-                        authenticatedCallback(AUTHSTATE_AUTHENTICATED, user);
+                t.getAccount(user).then((account) => {
+                    if (account) {
+                        console.log('Account exists');
+                        this.account = account;
+                        authenticatedCallback(AUTHSTATE_AUTHENTICATED);
                     } else {
-                        console.log('User does not exist, creating');
-                        t.createUser(t.user).then(() => authenticatedCallback(AUTHSTATE_ACCESS_REQUESTED, user));
+                        console.log('Account does not exist, creating');
+                        t.createAccount(t.user).then(() => authenticatedCallback(AUTHSTATE_ACCESS_REQUESTED));
                     }
-                });
+                }).catch(logError);
             } else {
-                t.user = null;
+                t.account = null;
                 authenticatedCallback(AUTHSTATE_NOT_AUTHENTICATED);
             }
         });
     }
 
-    createUser(user) {
-        return firebase.firestore().collection('users')
-            .add({
+    currentUser() {
+        return firebase.auth().currentUser;
+    }
+
+    currentAccount() {
+        return this.account;
+    }
+
+    createAccount(user) {
+        if (typeof user.email !== "string" || user.email.length === 0) {
+            throw "email should be non-empty string";
+        }
+        return firebase.firestore().collection('accounts').doc(user.email)
+            .set({
                 name: user.fullName,
                 email: user.email,
                 authorized: false
@@ -61,11 +69,8 @@ class AuthenticationContext {
             .catch(logError);
     }
 
-    userExists(user) {
-        return firebase.firestore().collection('users').where('email', '==', user.email)
-            .get()
-            .then((snap) => snap.size > 0)
-            .catch(logError)
+    getAccount(user) {
+        return firebase.firestore().collection('accounts').doc(user.email).get()
     }
 
     isAuthorized() {
@@ -74,7 +79,7 @@ class AuthenticationContext {
     }
 
     isAuthenticated() {
-        return this.user !== null;
+        return this.currentUser() !== null;
     }
 
     authenticate() {
