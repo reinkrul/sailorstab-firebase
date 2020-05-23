@@ -29,8 +29,8 @@ class Bar {
     }
 
     buyProduct(account, product) {
-        if (typeof account !== "object") {
-            throw "account should be string";
+        if (typeof account.email !== "string") {
+            throw "account email should be string";
         }
         if (!product.name) {
             throw "missing name";

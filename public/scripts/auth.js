@@ -29,16 +29,17 @@ class AuthenticationContext {
     constructor(authenticatedCallback) {
         let t = this;
         firebase.auth().onAuthStateChanged((user) => {
+            console.log(user.email)
             if (user) {
                 // User authenticated, retrieve authorization (account exists?)
                 t.getAccount(user).then((account) => {
-                    if (account) {
+                    if (account.exists) {
                         console.log('Account exists');
                         this.account = account;
                         authenticatedCallback(AUTHSTATE_AUTHENTICATED);
                     } else {
                         console.log('Account does not exist, creating');
-                        t.createAccount(t.user).then(() => authenticatedCallback(AUTHSTATE_ACCESS_REQUESTED));
+                        t.createAccount(user).then(() => authenticatedCallback(AUTHSTATE_ACCESS_REQUESTED));
                     }
                 }).catch(logError);
             } else {
@@ -60,9 +61,12 @@ class AuthenticationContext {
         if (typeof user.email !== "string" || user.email.length === 0) {
             throw "email should be non-empty string";
         }
+        if (typeof user.name !== "string" || user.name.length === 0) {
+            throw "name should be non-empty string";
+        }
         return firebase.firestore().collection('accounts').doc(user.email)
             .set({
-                name: user.fullName,
+                name: user.displayName,
                 email: user.email,
                 authorized: false
             })
