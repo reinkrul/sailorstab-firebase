@@ -29,6 +29,7 @@ class Bar {
     }
 
     buyProduct(account, product) {
+        console.log(account)
         if (typeof account.email !== "string") {
             throw "account email should be string";
         }

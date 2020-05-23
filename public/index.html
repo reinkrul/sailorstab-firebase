@@ -129,8 +129,8 @@
             let items = this.state.orderedProducts;
             let promises = [];
             for (let i = 0; i < items.length; i++) {
-                console.log(this.props.auth.account.email);
-                let r = bar.buyProduct(this.props.auth.account, items[i]);
+                console.log("email: " + this.props.auth.currentAccount().email);
+                let r = bar.buyProduct(this.props.auth.currentAccount(), items[i]);
                 console.log(r);
                 promises = promises.concat(r
                     .then(() => items[i] = null)

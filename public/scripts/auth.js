@@ -29,17 +29,22 @@ class AuthenticationContext {
     constructor(authenticatedCallback) {
         let t = this;
         firebase.auth().onAuthStateChanged((user) => {
-            console.log(user.email)
             if (user) {
                 // User authenticated, retrieve authorization (account exists?)
                 t.getAccount(user).then((account) => {
-                    if (account.exists) {
+                    if (account) {
                         console.log('Account exists');
                         this.account = account;
                         authenticatedCallback(AUTHSTATE_AUTHENTICATED);
                     } else {
                         console.log('Account does not exist, creating');
-                        t.createAccount(user).then(() => authenticatedCallback(AUTHSTATE_ACCESS_REQUESTED));
+                        t.createAccount(user).then((newAccount) => {
+                            if (newAccount.authorized) {
+                                authenticatedCallback(AUTHSTATE_AUTHENTICATED);
+                            } else {
+                                authenticatedCallback(AUTHSTATE_ACCESS_REQUESTED);
+                            }
+                        });
                     }
                 }).catch(logError);
             } else {
@@ -47,10 +52,6 @@ class AuthenticationContext {
                 authenticatedCallback(AUTHSTATE_NOT_AUTHENTICATED);
             }
         });
-    }
-
-    currentUser() {
-        return firebase.auth().currentUser;
     }
 
     currentAccount() {
@@ -61,29 +62,44 @@ class AuthenticationContext {
         if (typeof user.email !== "string" || user.email.length === 0) {
             throw "email should be non-empty string";
         }
-        if (typeof user.name !== "string" || user.name.length === 0) {
+        if (typeof user.displayName !== "string" || user.displayName.length === 0) {
             throw "name should be non-empty string";
         }
+        let account = {
+            name: user.displayName,
+            email: user.email,
+            tab: 0,
+            authorized: true, // TODO: Switch to false
+        };
         return firebase.firestore().collection('accounts').doc(user.email)
-            .set({
-                name: user.displayName,
-                email: user.email,
-                authorized: false
-            })
+            .set(account)
+            .then(() => account)
             .catch(logError);
     }
 
     getAccount(user) {
-        return firebase.firestore().collection('accounts').doc(user.email).get()
+        return firebase.firestore().collection('accounts').doc(user.email)
+            .get()
+            .then((a) => {
+                if (a.exists) {
+                    return {
+                        name: a.get('name'),
+                        email: a.get('email'),
+                        authorized: a.get('authorized'),
+                        tab: a.get('tab'),
+                    }
+                } else {
+                    return null
+                }
+            })
     }
 
     isAuthorized() {
-        // TODO
-        return this.isAuthenticated() && true;// this.user.authorized
+        return this.isAuthenticated() && this.currentAccount().authorized;
     }
 
     isAuthenticated() {
-        return this.currentUser() !== null;
+        return this.currentAccount() !== null;
     }
 
     authenticate() {
